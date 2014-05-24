@@ -7,4 +7,8 @@ Requisites
 ==================
 
 Kernel headers are not enough.
-Please, make sure you have the complete kernel source code of your kernel in your /usr/src folder.
+Please, make sure you have the complete kernel source code of your kernel in your
+
+/usr/src/linux-`uname -r`
+
+folder.
