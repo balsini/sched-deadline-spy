@@ -29,26 +29,17 @@ struct task_list_elem_t * head;
 
 static struct proc_dir_entry * sched_dl_folder;
 
-static int sched_dl_show(struct seq_file * m, void * v)
+void print_file_from_old_to_new(struct seq_file * m)
 {
   struct task_list_elem_t * p;
   unsigned int i, count;
 
   p = (struct task_list_elem_t *)(m->private);
-
   count = p->buffer.count;
   i = p->buffer.head;
 
-  //seq_printf(m, "pid ( %d ) data# ( %d )\n", p->pid, count);
-  //seq_printf(m, "-----------------------\n");
-
+  // Printing from the oldest to the newest
   while (count > 0) {
-    //seq_printf(m, "[%lu.%ld] %lld : %c\n",
-    //           (unsigned long)(p->buffer.time[i].tv_sec),
-    //           (long int)p->buffer.time[i].tv_nsec,
-    //           p->buffer.C[i],
-    //           p->buffer.miss[i]);
-    //seq_printf(m, "%lld\n", p->buffer.C[i]);
     seq_printf(m, "%lu %ld %lld ; \n",
                (unsigned long)(p->buffer.time[i].tv_sec),
                (long int)p->buffer.time[i].tv_nsec,
@@ -56,7 +47,48 @@ static int sched_dl_show(struct seq_file * m, void * v)
     i = (i + 1) % PERIODS_TO_REMEMBER;
     --count;
   }
+}
 
+void print_file_from_new_to_old(struct seq_file * m)
+{
+  struct task_list_elem_t * p;
+  unsigned int i, count;
+
+  p = (struct task_list_elem_t *)(m->private);
+  count = p->buffer.count;
+  i = p->buffer.tail - 1;
+
+  // Printing from the oldest to the newest
+  while (count > 0) {
+    if (i < 0)
+      i = PERIODS_TO_REMEMBER - 1;
+    seq_printf(m, "%lu %ld %lld ; \n",
+               (unsigned long)(p->buffer.time[i].tv_sec),
+               (long int)p->buffer.time[i].tv_nsec,
+               p->buffer.C[i]);
+    --i;
+    --count;
+  }
+}
+
+void print_file_hud(struct seq_file * m)
+{
+  struct task_list_elem_t * p;
+  unsigned int count;
+
+  p = (struct task_list_elem_t *)(m->private);
+  count = p->buffer.count;
+
+  seq_printf(m, "pid ( %d ) data# ( %d )\n", p->pid, count);
+  seq_printf(m, "-----------------------\n");
+
+}
+
+static int sched_dl_show(struct seq_file * m, void * v)
+{
+  //print_file_hud(m);
+  //print_file_from_old_to_new(m);
+  print_file_from_new_to_old(m);
   return 0;
 }
 
