@@ -113,6 +113,7 @@ static int sched_dl_open(struct inode * inode, struct  file * file)
 static void inst_replenish_dl_entity(struct sched_dl_entity *dl_se,
                                      struct sched_dl_entity *pi_se)
 {
+
   struct task_list_elem_t * p;
   u64 exec_time;
   u64 server_bandwidth_used;
@@ -139,18 +140,16 @@ static void inst_replenish_dl_entity(struct sched_dl_entity *dl_se,
 
     //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"last server_bandwidth_used: %lld\n", server_bandwidth_used);
 
-
     cb_enqueue(&(p->buffer),
                exec_time,
                miss,
                current_kernel_time());
-/*
 
-    cb_enqueue(&(p->buffer),
-               pi_se->dl_runtime - dl_se->runtime,
-               miss,
-               current_kernel_time());
-*/
+    //cb_enqueue(&(p->buffer),
+    //           pi_se->dl_runtime - dl_se->runtime,
+    //           miss,
+    //           current_kernel_time());
+
     //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"last exec: %lld, miss: %c\n\n", exec_time, miss);
 
     p->buffer.last = p->task_struct_pointer->se.sum_exec_runtime;
@@ -180,24 +179,37 @@ static void inst_enqueue_task_dl(struct rq * rq,
   //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"replenishing PID( %d ) PGRP( %d )\n", ts->pid, ts->tgid);
 
   p = get_elem_by_task_pid(head, ts->pid);
-  if (!p) {
-    //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"unknown pid found, creating instance\n");
-    p = create_task_list_elem(ts->pid);
-    p->dl_descriptor = &(ts->dl);
-    p->task_struct_pointer = ts;
+    if (!p) {
+      //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"unknown pid found, creating instance\n");
+      p = create_task_list_elem();
+      if (p) {
+        insert_task_list_elem(&head, p);
 
-    if (sched_dl_folder) {
-      // creating process file //
+        p->pid = ts->pid;
+        p->dl_descriptor = &(ts->dl);
+        p->task_struct_pointer = ts;
 
-      kitoa(p->pid, path_buffer, 10);
-      p->file = proc_create_data(path_buffer, 0444, sched_dl_folder, &sched_dl_fops, p);
+        if (sched_dl_folder) {
+          // creating process file //
 
-      //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"created file with address: %p\n", p->file);
-      //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"passed parameter: %p\n", p);
+          p->file_ops = kmalloc(sizeof(struct file_operations), GFP_KERNEL);
+          if (p->file_ops) {
+            p->file_ops->owner = THIS_MODULE;
+            p->file_ops->open = sched_dl_open;
+            p->file_ops->read = seq_read;
+            p->file_ops->llseek = seq_lseek;
+            p->file_ops->release = single_release;
+
+            kitoa(p->pid, path_buffer, 10);
+            p->file = proc_create_data(path_buffer, 0444, sched_dl_folder, p->file_ops, p);
+
+            //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"created file with name: %s\n", path_buffer);
+            //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"created file with address: %p\n", p->file);
+            //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"passed parameter: %p\n", p);
+          }
+        }
+      }
     }
-
-    insert_task_list_elem(&head, p);
-  }
 
   //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"enqueuing new value\n");
 

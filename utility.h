@@ -1,7 +1,5 @@
 #ifdef DEBUGGING
 #define pid_t u64
-#define vmalloc malloc
-#define vfree free
 #endif
 #ifdef DEBUGGING_KERNEL_FLAG
 #endif
@@ -29,6 +27,7 @@ struct task_list_elem_t {
   void * dl_descriptor;
   struct task_struct * task_struct_pointer;
   struct proc_dir_entry * file;
+  struct file_operations * file_ops;
 
   struct circular_buffer_t buffer;
 };
@@ -37,24 +36,26 @@ struct task_list_elem_t {
  * Creates a new task_list_elem and inserts it
  * in list's head.
  */
-static struct task_list_elem_t * create_task_list_elem(pid_t pid)
+static struct task_list_elem_t * create_task_list_elem(void)
 {
-  //int i;
-  struct task_list_elem_t * t = vmalloc(sizeof(struct task_list_elem_t));
+  struct task_list_elem_t * t;
 
-  t->file = NULL;
+  t = kmalloc(sizeof(struct task_list_elem_t), GFP_KERNEL);
+  if (t) {
+    t->dl_descriptor = NULL;
+    t->task_struct_pointer = NULL;
+    t->file = NULL;
+    t->file_ops = NULL;
 
-  t->buffer.head = 0;
-  t->buffer.tail = 0;
-  t->buffer.count = 0;
+    t->buffer.head = 0;
+    t->buffer.tail = 0;
+    t->buffer.count = 0;
 
-  t->buffer.last = 0;
+    t->buffer.last = 0;
 
-  //for (i=0; i<PERIODS_TO_REMEMBER; ++i)
-  //  t->buffer.C[i] = 0;
-
-  t->pid = pid;
-  t->next = 0;
+    t->pid = 0;
+    t->next = 0;
+  }
 
   return t;
 }
@@ -79,8 +80,10 @@ static void clear_task_list(struct task_list_elem_t ** head)
   while (*head) {
     if ((*head)->file != NULL)
       proc_remove((*head)->file);
+    if ((*head)->file_ops != NULL)
+      kfree((*head)->file_ops);
     p = (*head)->next;
-    vfree(*head);
+    kfree(*head);
     *head = p;
   }
 }
