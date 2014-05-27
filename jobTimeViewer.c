@@ -158,21 +158,12 @@ static void inst_replenish_dl_entity(struct sched_dl_entity *dl_se,
   jprobe_return();
 }
 
-static const struct file_operations sched_dl_fops = {
-  .owner = THIS_MODULE,
-  .open =  sched_dl_open,
-  .read = seq_read,
-  .llseek = seq_lseek,
-  .release = single_release,
-};
-
 static void inst_enqueue_task_dl(struct rq * rq,
                                  struct task_struct * ts,
                                  int flags)
 {
   struct task_list_elem_t * p;
   char path_buffer[50];
-  //char other_buffer[50];
 
   path_buffer[0] = '\0';
 
