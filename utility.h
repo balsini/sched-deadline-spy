@@ -4,7 +4,7 @@
 #ifdef DEBUGGING_KERNEL_FLAG
 #endif
 
-#define PERIODS_TO_REMEMBER 4000
+#define PERIODS_TO_REMEMBER 500
 
 struct complex_ret_t {
   int value;
