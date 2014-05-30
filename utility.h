@@ -168,6 +168,10 @@ static struct task_list_elem_t * get_elem_by_task_file(struct task_list_elem_t *
 }
 */
 
+/*
+ * Removes the head element from the circular buffer,
+ * returning it
+ */
 static u64 cb_dequeue(struct circular_buffer_t * buffer)
 {
   u64 ret;
@@ -182,6 +186,9 @@ static u64 cb_dequeue(struct circular_buffer_t * buffer)
   return ret;
 }
 
+/*
+ * Inserts one element in the circular buffer
+ */
 static void cb_enqueue(struct circular_buffer_t * buffer, u64 v, char miss, struct timespec time)
 {
   if (buffer->count == PERIODS_TO_REMEMBER)
@@ -200,6 +207,9 @@ static u64 cb_get(struct circular_buffer_t * buffer, int i)
 }
 */
 
+/*
+ * Returns the string length
+ */
 int kstrlen(char * s)
 {
   int i=0;
@@ -207,6 +217,9 @@ int kstrlen(char * s)
   return i;
 }
 
+/*
+ * Modifies an array of chars, reverting its order
+ */
 char * kstrrev(char *str) {
   char *p1, *p2;
   if (!str || !*str)
@@ -219,6 +232,10 @@ char * kstrrev(char *str) {
   return str;
 }
 
+/*
+ * Transforms an integer into an array of chars in a
+ * certain base
+ */
 void kitoa(int n, char *s, int b) {
   static char digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
   int i=0, sign;
@@ -234,6 +251,9 @@ void kitoa(int n, char *s, int b) {
   s = kstrrev(s);
 }
 
+/*
+ * String concatenation
+ */
 void kstrcat(char * dst, char * src)
 {
   int i = 0;
