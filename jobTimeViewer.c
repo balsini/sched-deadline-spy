@@ -15,6 +15,12 @@
 #include <kernel/sched/sched.h>
 #include <fs/proc/internal.h>
 
+
+MODULE_AUTHOR("Alessio Balsini");
+MODULE_DESCRIPTION("For each SCHED_DEADLINE scheduled process, a new readable /proc/sched_deadline/[PID] inode will be created, containing tasks' execution information");
+MODULE_LICENSE("GPL");
+
+
 #define CONSOLE_LOG_LEVEL KERN_EMERG
 
 #define MODULE_NAME "jobTimeViewer"
@@ -25,10 +31,21 @@
 
 #include "utility.h"
 
+/*
+ * The head element of the list
+ */
 struct task_list_elem_t * head;
 
+/*
+ * The folder in which all the statistics files
+ * will be inserted
+ */
 static struct proc_dir_entry * sched_dl_folder;
 
+/*
+ * Writes the statistical values to a file, from
+ * the oldest to the newest
+ */
 void print_file_from_old_to_new(struct seq_file * m)
 {
   struct task_list_elem_t * p;
@@ -40,15 +57,20 @@ void print_file_from_old_to_new(struct seq_file * m)
 
   // Printing from the oldest to the newest
   while (count > 0) {
-    seq_printf(m, "%lu %ld %lld ; \n",
+    seq_printf(m, "%lu %ld %lld %c\n",
                (unsigned long)(p->buffer.time[i].tv_sec),
                (long int)p->buffer.time[i].tv_nsec,
-               p->buffer.C[i]);
+               p->buffer.C[i],
+               p->buffer.miss[i]);
     i = (i + 1) % PERIODS_TO_REMEMBER;
     --count;
   }
 }
 
+/*
+ * Writes the statistical values to a file, from
+ * the newest to the oldest
+ */
 void print_file_from_new_to_old(struct seq_file * m)
 {
   struct task_list_elem_t * p;
@@ -62,15 +84,20 @@ void print_file_from_new_to_old(struct seq_file * m)
   while (count > 0) {
     if (i < 0)
       i = PERIODS_TO_REMEMBER - 1;
-    seq_printf(m, "%lu %ld %lld ; \n",
+    seq_printf(m, "%lu %ld %lld %c\n",
                (unsigned long)(p->buffer.time[i].tv_sec),
                (long int)p->buffer.time[i].tv_nsec,
-               p->buffer.C[i]);
+               p->buffer.C[i],
+               p->buffer.miss[i]);
     --i;
     --count;
   }
 }
 
+/*
+ * Prints some little details regarding the
+ * file content
+ */
 void print_file_hud(struct seq_file * m)
 {
   struct task_list_elem_t * p;
@@ -84,6 +111,9 @@ void print_file_hud(struct seq_file * m)
 
 }
 
+/*
+ * Prints the tasks info
+ */
 static int sched_dl_show(struct seq_file * m, void * v)
 {
   //print_file_hud(m);
@@ -92,6 +122,9 @@ static int sched_dl_show(struct seq_file * m, void * v)
   return 0;
 }
 
+/*
+ * Opens the tasks file
+ */
 static int sched_dl_open(struct inode * inode, struct  file * file)
 {
   int ret;
@@ -108,10 +141,14 @@ static int sched_dl_open(struct inode * inode, struct  file * file)
 }
 
 /*
+ * The following kernel function has been intercepted:
  * A replenishment has been requested
+ *
+ * Updates the statistics of the list element, by inserting a new element
+ * into the circular buffer.
  */
-static void inst_replenish_dl_entity(struct sched_dl_entity *dl_se,
-                                     struct sched_dl_entity *pi_se)
+static void inst_update_dl_entity(struct sched_dl_entity *dl_se,
+                                  struct sched_dl_entity *pi_se)
 {
 
   struct task_list_elem_t * p;
@@ -158,6 +195,16 @@ static void inst_replenish_dl_entity(struct sched_dl_entity *dl_se,
   jprobe_return();
 }
 
+/*
+ * The following kernel function has been intercepted:
+ * A task been enqueued
+ *
+ * Checks if the list already contains the element associated to the
+ * PID for which this kernel function has been launched.
+ * If the list element does not exist, it is created and initialized.
+ * This function is needed because it can intercept the task_struct
+ * pointer, without which it's impossible to obtain the task PID.
+ */
 static void inst_enqueue_task_dl(struct rq * rq,
                                  struct task_struct * ts,
                                  int flags)
@@ -170,37 +217,37 @@ static void inst_enqueue_task_dl(struct rq * rq,
   //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"replenishing PID( %d ) PGRP( %d )\n", ts->pid, ts->tgid);
 
   p = get_elem_by_task_pid(head, ts->pid);
-    if (!p) {
-      //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"unknown pid found, creating instance\n");
-      p = create_task_list_elem();
-      if (p) {
-        insert_task_list_elem(&head, p);
+  if (!p) {
+    //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"unknown pid found, creating instance\n");
+    p = create_task_list_elem();
+    if (p) {
+      insert_task_list_elem(&head, p);
 
-        p->pid = ts->pid;
-        p->dl_descriptor = &(ts->dl);
-        p->task_struct_pointer = ts;
+      p->pid = ts->pid;
+      p->dl_descriptor = &(ts->dl);
+      p->task_struct_pointer = ts;
 
-        if (sched_dl_folder) {
-          // creating process file //
+      if (sched_dl_folder) {
+        // creating process file //
 
-          p->file_ops = kmalloc(sizeof(struct file_operations), GFP_KERNEL);
-          if (p->file_ops) {
-            p->file_ops->owner = THIS_MODULE;
-            p->file_ops->open = sched_dl_open;
-            p->file_ops->read = seq_read;
-            p->file_ops->llseek = seq_lseek;
-            p->file_ops->release = single_release;
+        p->file_ops = kmalloc(sizeof(struct file_operations), GFP_KERNEL);
+        if (p->file_ops) {
+          p->file_ops->owner = THIS_MODULE;
+          p->file_ops->open = sched_dl_open;
+          p->file_ops->read = seq_read;
+          p->file_ops->llseek = seq_lseek;
+          p->file_ops->release = single_release;
 
-            kitoa(p->pid, path_buffer, 10);
-            p->file = proc_create_data(path_buffer, 0444, sched_dl_folder, p->file_ops, p);
+          kitoa(p->pid, path_buffer, 10);
+          p->file = proc_create_data(path_buffer, 0444, sched_dl_folder, p->file_ops, p);
 
-            //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"created file with name: %s\n", path_buffer);
-            //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"created file with address: %p\n", p->file);
-            //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"passed parameter: %p\n", p);
-          }
+          //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"created file with name: %s\n", path_buffer);
+          //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"created file with address: %p\n", p->file);
+          //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"passed parameter: %p\n", p);
         }
       }
     }
+  }
 
   //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"enqueuing new value\n");
 
@@ -214,12 +261,12 @@ static struct jprobe enqueue_task_dl_jprobe = {
   .entry = (kprobe_opcode_t *) inst_enqueue_task_dl
 };
 
-static struct jprobe replenish_dl_entity_jprobe = {
+static struct jprobe update_dl_entity_jprobe = {
   .kp = {
     .symbol_name	= "update_dl_entity",
     //.symbol_name	= "replenish_dl_entity",
   },
-  .entry = (kprobe_opcode_t *) inst_replenish_dl_entity
+  .entry = (kprobe_opcode_t *) inst_update_dl_entity
 };
 
 int init_module(void)
@@ -237,7 +284,7 @@ int init_module(void)
   printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"plant jprobe at %p, handler addr %p\n",
          enqueue_task_dl_jprobe.kp.addr, enqueue_task_dl_jprobe.entry);
 
-  register_jprobe(&replenish_dl_entity_jprobe);
+  register_jprobe(&update_dl_entity_jprobe);
 
   printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"plant jprobe at %p, handler addr %p\n",
          enqueue_task_dl_jprobe.kp.addr, enqueue_task_dl_jprobe.entry);
@@ -247,7 +294,7 @@ int init_module(void)
 
 void cleanup_module(void)
 {
-  unregister_jprobe(&replenish_dl_entity_jprobe);
+  unregister_jprobe(&update_dl_entity_jprobe);
   unregister_jprobe(&enqueue_task_dl_jprobe);
 
   printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"jprobe unregistered\n");
@@ -257,7 +304,3 @@ void cleanup_module(void)
 
   remove_proc_entry(PROC_FS_FOLDER_NAME, NULL);
 }
-
-MODULE_AUTHOR("Alessio Balsini");
-MODULE_DESCRIPTION("For each SCHED_DEADLINE scheduled process, a new readable /proc/sched_deadline/[PID] inode will be created, containing tasks' execution information");
-MODULE_LICENSE("GPL");

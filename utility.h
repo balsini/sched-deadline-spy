@@ -187,7 +187,8 @@ static u64 cb_dequeue(struct circular_buffer_t * buffer)
 }
 
 /*
- * Inserts one element in the circular buffer
+ * Inserts one element in the circular buffer.
+ * If the buffer is full, the head element (the oldest) is replaced.
  */
 static void cb_enqueue(struct circular_buffer_t * buffer, u64 v, char miss, struct timespec time)
 {
