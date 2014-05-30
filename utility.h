@@ -6,10 +6,15 @@
 
 #define PERIODS_TO_REMEMBER 50
 
-struct complex_ret_t {
-  int value;
-  void * pointer;
-};
+/*
+ * A circular buffer.
+ * It contains:
+ *   C: the execution time of the job
+ *   time: the time at which the sample
+ *     has been taken
+ *   miss: represents if the last job resulted
+ *     in a deadline miss
+ */
 
 struct circular_buffer_t {
   int head, tail, count;
@@ -19,6 +24,21 @@ struct circular_buffer_t {
   char miss[PERIODS_TO_REMEMBER];
 };
 
+/*
+ * Element of the list which will contain all the
+ * data associated to SCHED_DEADLINE tasks.
+ * It contains:
+ *   next: the next element of the list;
+ *   pid: the PID;
+ *   dl_descriptor: the pointer to the task_struct.dl
+ *     field
+ *   task_struct_pointer: the pointer to task_struct
+ *   file: the pointer to the file in which statistics
+ *     will be pushed
+ *   file_ops: the options of the file (needed at
+ *     creation time)
+ *   buffer: the circular buffer
+ */
 struct task_list_elem_t {
   struct task_list_elem_t * next;
 
