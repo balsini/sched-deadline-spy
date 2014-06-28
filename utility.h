@@ -6,6 +6,8 @@
 
 #define PERIODS_TO_REMEMBER 50
 
+#include <linux/slab.h>
+
 /*
  * A circular buffer.
  * It contains:
