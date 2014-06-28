@@ -12,8 +12,7 @@
 
 #include <linux/spinlock.h>
 
-#include <kernel/sched/sched.h>
-#include <fs/proc/internal.h>
+#include <linux/sched.h>
 
 
 MODULE_AUTHOR("Alessio Balsini");
@@ -205,6 +204,9 @@ static void inst_update_dl_entity(struct sched_dl_entity *dl_se,
  * This function is needed because it can intercept the task_struct
  * pointer, without which it's impossible to obtain the task PID.
  */
+
+struct rq;
+
 static void inst_enqueue_task_dl(struct rq * rq,
                                  struct task_struct * ts,
                                  int flags)
