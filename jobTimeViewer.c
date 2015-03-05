@@ -289,7 +289,7 @@ int init_module(void)
   register_jprobe(&update_dl_entity_jprobe);
 
   printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"plant jprobe at %p, handler addr %p\n",
-         enqueue_task_dl_jprobe.kp.addr, enqueue_task_dl_jprobe.entry);
+         update_dl_entity_jprobe.kp.addr, update_dl_entity_jprobe.entry);
 
   return 0;
 }
