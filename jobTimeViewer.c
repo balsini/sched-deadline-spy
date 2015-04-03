@@ -205,9 +205,58 @@ static void inst_update_dl_entity(struct sched_dl_entity *dl_se,
 
 struct rq;
 
+/*
 static void inst_enqueue_task_dl(struct rq * rq,
                                  struct task_struct * ts,
                                  int flags)
+{
+  struct task_list_elem_t * p;
+  char path_buffer[50];
+
+  path_buffer[0] = '\0';
+
+  //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"replenishing PID( %d ) PGRP( %d )\n", ts->pid, ts->tgid);
+
+  p = get_elem_by_task_pid(head, ts->pid);
+  if (!p) {
+    //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"unknown pid found, creating instance\n");
+    p = create_task_list_elem();
+    if (p) {
+      insert_task_list_elem(&head, p);
+
+      p->pid = ts->pid;
+      p->dl_descriptor = &(ts->dl);
+      p->task_struct_pointer = ts;
+
+      if (sched_dl_folder) {
+        // creating process file //
+
+        p->file_ops = kmalloc(sizeof(struct file_operations), GFP_KERNEL);
+        if (p->file_ops) {
+          p->file_ops->owner = THIS_MODULE;
+          p->file_ops->open = sched_dl_open;
+          p->file_ops->read = seq_read;
+          p->file_ops->llseek = seq_lseek;
+          p->file_ops->release = single_release;
+
+          kitoa(p->pid, path_buffer, 10);
+          p->file = proc_create_data(path_buffer, 0444, sched_dl_folder, p->file_ops, p);
+
+          //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"created file with name: %s\n", path_buffer);
+          //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"created file with address: %p\n", p->file);
+          //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"passed parameter: %p\n", p);
+        }
+      }
+    }
+  }
+
+  //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"enqueuing new value\n");
+
+  jprobe_return();
+}
+*/
+
+static void inst_switched_to_dl(struct rq *rq, struct task_struct *ts)
 {
   struct task_list_elem_t * p;
   char path_buffer[50];
@@ -300,11 +349,20 @@ static void inst_switched_from_dl(struct rq *rq, struct task_struct *p)
   jprobe_return();
 }
 
+/*
 static struct jprobe enqueue_task_dl_jprobe = {
   .kp = {
     .symbol_name	= "enqueue_task_dl",
   },
   .entry = (kprobe_opcode_t *) inst_enqueue_task_dl
+};
+*/
+
+static struct jprobe switched_to_dl_jprobe = {
+  .kp = {
+    .symbol_name	= "switched_to_dl",
+  },
+  .entry = (kprobe_opcode_t *) inst_switched_to_dl
 };
 
 static struct jprobe update_dl_entity_jprobe = {
@@ -339,10 +397,15 @@ int init_module(void)
     return -ENOMEM;
   }
 
-  register_jprobe(&enqueue_task_dl_jprobe);
+  //register_jprobe(&enqueue_task_dl_jprobe);
 
-  printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"plant jprobe [enqueue_task_dl] at %p, handler addr %p\n",
-         enqueue_task_dl_jprobe.kp.addr, enqueue_task_dl_jprobe.entry);
+  //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"plant jprobe [enqueue_task_dl] at %p, handler addr %p\n",
+  //       enqueue_task_dl_jprobe.kp.addr, enqueue_task_dl_jprobe.entry);
+
+  register_jprobe(&switched_to_dl_jprobe);
+
+  printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"plant jprobe [switched_to_dl] at %p, handler addr %p\n",
+         switched_to_dl_jprobe.kp.addr, switched_to_dl_jprobe.entry);
 
   register_jprobe(&update_dl_entity_jprobe);
 
@@ -365,7 +428,8 @@ int init_module(void)
 void cleanup_module(void)
 {
   unregister_jprobe(&update_dl_entity_jprobe);
-  unregister_jprobe(&enqueue_task_dl_jprobe);
+  unregister_jprobe(&switched_to_dl_jprobe);
+  //unregister_jprobe(&enqueue_task_dl_jprobe);
   unregister_jprobe(&task_dead_dl_jprobe);
   unregister_jprobe(&switched_from_dl_jprobe);
 
