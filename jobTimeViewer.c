@@ -277,6 +277,29 @@ static void inst_task_dead_dl(struct task_struct * p)
   jprobe_return();
 }
 
+/*
+ * The following kernel function has been intercepted:
+ * A task is no more scheduled with SCHED_DEADLINE
+ *
+ * Searches for the PID of the switching task and removes the associated
+ * file and data structures.
+ */
+static void inst_switched_from_dl(struct rq *rq, struct task_struct *p)
+{
+  struct task_list_elem_t * tle;
+
+  tle = get_elem_by_task_pid(head, p->pid);
+  if (tle) {
+    clean_task_list_elem(tle);
+    remove_task_list_elem(&head, tle);
+    kfree(tle);
+  }
+
+  //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"enqueuing new value\n");
+
+  jprobe_return();
+}
+
 static struct jprobe enqueue_task_dl_jprobe = {
   .kp = {
     .symbol_name	= "enqueue_task_dl",
@@ -297,6 +320,13 @@ static struct jprobe task_dead_dl_jprobe = {
     .symbol_name	= "task_dead_dl",
   },
   .entry = (kprobe_opcode_t *) inst_task_dead_dl
+};
+
+static struct jprobe switched_from_dl_jprobe = {
+  .kp = {
+    .symbol_name	= "switched_from_dl",
+  },
+  .entry = (kprobe_opcode_t *) inst_switched_from_dl
 };
 
 int init_module(void)
@@ -324,6 +354,11 @@ int init_module(void)
   printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"plant jprobe [task_dead_dl] at %p, handler addr %p\n",
          task_dead_dl_jprobe.kp.addr, task_dead_dl_jprobe.entry);
 
+  register_jprobe(&switched_from_dl_jprobe);
+
+  printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"plant jprobe [switched_from_dl] at %p, handler addr %p\n",
+         switched_from_dl_jprobe.kp.addr, switched_from_dl_jprobe.entry);
+
   return 0;
 }
 
@@ -331,8 +366,10 @@ void cleanup_module(void)
 {
   unregister_jprobe(&update_dl_entity_jprobe);
   unregister_jprobe(&enqueue_task_dl_jprobe);
+  unregister_jprobe(&task_dead_dl_jprobe);
+  unregister_jprobe(&switched_from_dl_jprobe);
 
-  printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"jprobe unregistered\n");
+  printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"jprobes unregistered\n");
 
   //print_statistics(head);
   clear_task_list(&head);
