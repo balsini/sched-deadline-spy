@@ -86,10 +86,46 @@ static struct task_list_elem_t * create_task_list_elem(void)
  * Creates a new task_list_elem and inserts it
  * in list's head.
  */
-static void insert_task_list_elem(struct task_list_elem_t ** head, struct task_list_elem_t * elem)
+static void insert_task_list_elem(struct task_list_elem_t ** head,
+                                  struct task_list_elem_t * elem)
 {
   elem->next = *head;
   *head = elem;
+}
+
+/*
+ * Cleans the content of an element of the list
+ */
+static void clean_task_list_elem(struct task_list_elem_t * elem)
+{
+  if (elem->file != NULL)
+    proc_remove(elem->file);
+  if (elem->file_ops != NULL)
+    kfree(elem->file_ops);
+}
+
+/*
+ * Removes an element from the list
+ */
+static void remove_task_list_elem(struct task_list_elem_t ** head,
+                                                       struct task_list_elem_t * elem)
+{
+  struct task_list_elem_t * p = *head;
+  struct task_list_elem_t * p_prev;
+
+  if (p == elem) {
+    *head = (*head)->next;
+    return;
+  } else {
+    while (p) {
+      p_prev = p;
+      p = p->next;
+      if (p == elem) {
+        p_prev->next = p->next;
+        return;
+      }
+    }
+  }
 }
 
 /*
@@ -100,10 +136,7 @@ static void clear_task_list(struct task_list_elem_t ** head)
   struct task_list_elem_t * p;
 
   while (*head) {
-    if ((*head)->file != NULL)
-      proc_remove((*head)->file);
-    if ((*head)->file_ops != NULL)
-      kfree((*head)->file_ops);
+    clean_task_list_elem(*head);
     p = (*head)->next;
     kfree(*head);
     *head = p;

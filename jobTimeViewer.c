@@ -107,7 +107,6 @@ void print_file_hud(struct seq_file * m)
 
   seq_printf(m, "pid ( %d ) data# ( %d )\n", p->pid, count);
   seq_printf(m, "-----------------------\n");
-
 }
 
 /*
@@ -149,7 +148,6 @@ static int sched_dl_open(struct inode * inode, struct  file * file)
 static void inst_update_dl_entity(struct sched_dl_entity *dl_se,
                                   struct sched_dl_entity *pi_se)
 {
-
   struct task_list_elem_t * p;
   u64 exec_time;
   u64 server_bandwidth_used;
@@ -256,6 +254,29 @@ static void inst_enqueue_task_dl(struct rq * rq,
   jprobe_return();
 }
 
+/*
+ * The following kernel function has been intercepted:
+ * A task is dead
+ *
+ * Searches for the PID of the dying task and removes the associated
+ * file and data structures.
+ */
+static void inst_task_dead_dl(struct task_struct * p)
+{
+  struct task_list_elem_t * tle;
+
+  tle = get_elem_by_task_pid(head, p->pid);
+  if (tle) {
+    clean_task_list_elem(tle);
+    remove_task_list_elem(&head, tle);
+    kfree(tle);
+  }
+
+  //printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"enqueuing new value\n");
+
+  jprobe_return();
+}
+
 static struct jprobe enqueue_task_dl_jprobe = {
   .kp = {
     .symbol_name	= "enqueue_task_dl",
@@ -271,6 +292,13 @@ static struct jprobe update_dl_entity_jprobe = {
   .entry = (kprobe_opcode_t *) inst_update_dl_entity
 };
 
+static struct jprobe task_dead_dl_jprobe = {
+  .kp = {
+    .symbol_name	= "task_dead_dl",
+  },
+  .entry = (kprobe_opcode_t *) inst_task_dead_dl
+};
+
 int init_module(void)
 {
   head = 0;
@@ -283,13 +311,18 @@ int init_module(void)
 
   register_jprobe(&enqueue_task_dl_jprobe);
 
-  printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"plant jprobe at %p, handler addr %p\n",
+  printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"plant jprobe [enqueue_task_dl] at %p, handler addr %p\n",
          enqueue_task_dl_jprobe.kp.addr, enqueue_task_dl_jprobe.entry);
 
   register_jprobe(&update_dl_entity_jprobe);
 
-  printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"plant jprobe at %p, handler addr %p\n",
+  printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"plant jprobe [update_dl_entity] at %p, handler addr %p\n",
          update_dl_entity_jprobe.kp.addr, update_dl_entity_jprobe.entry);
+
+  register_jprobe(&task_dead_dl_jprobe);
+
+  printk(CONSOLE_LOG_LEVEL MODULE_NAME_PRINTK"plant jprobe [task_dead_dl] at %p, handler addr %p\n",
+         task_dead_dl_jprobe.kp.addr, task_dead_dl_jprobe.entry);
 
   return 0;
 }
